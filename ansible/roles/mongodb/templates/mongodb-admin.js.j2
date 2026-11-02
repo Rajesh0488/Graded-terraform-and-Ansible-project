@@ -1,0 +1,16 @@
+const adminDb = db.getSiblingDB("admin");
+let authenticated = false;
+
+try {
+  authenticated = adminDb.auth({{ mongo_admin_user | to_json }}, {{ mongo_admin_password | to_json }});
+} catch (error) {
+  authenticated = false;
+}
+
+if (!authenticated) {
+  adminDb.createUser({
+    user: {{ mongo_admin_user | to_json }},
+    pwd: {{ mongo_admin_password | to_json }},
+    roles: [{ role: "root", db: "admin" }]
+  });
+}

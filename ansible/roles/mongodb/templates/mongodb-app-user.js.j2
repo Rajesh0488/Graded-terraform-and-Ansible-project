@@ -1,0 +1,20 @@
+const adminDb = db.getSiblingDB("admin");
+if (!adminDb.auth({{ mongo_admin_user | to_json }}, {{ mongo_admin_password | to_json }})) {
+  throw new Error("MongoDB administrator authentication failed");
+}
+
+const appDb = db.getSiblingDB({{ mongo_database | to_json }});
+const appUser = {{ mongo_app_user | to_json }};
+
+if (appDb.getUser(appUser)) {
+  appDb.updateUser(appUser, {
+    pwd: {{ mongo_app_password | to_json }},
+    roles: [{ role: "readWrite", db: {{ mongo_database | to_json }} }]
+  });
+} else {
+  appDb.createUser({
+    user: appUser,
+    pwd: {{ mongo_app_password | to_json }},
+    roles: [{ role: "readWrite", db: {{ mongo_database | to_json }} }]
+  });
+}

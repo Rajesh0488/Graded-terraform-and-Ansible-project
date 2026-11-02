@@ -1,0 +1,96 @@
+---
+- name: Update apt cache
+  become: true
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install common packages
+  become: true
+  apt:
+    name:
+      - curl
+      - git
+      - ca-certificates
+      - gnupg
+      - acl
+      - ufw
+      - fail2ban
+    state: present
+
+- name: Harden SSH access
+  become: true
+  ansible.builtin.template:
+    src: ssh-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-travelmemory-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "sshd -t -f %s"
+  notify: Restart SSH
+
+- name: Set firewall defaults
+  become: true
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - default
+      - "{{ item.policy }}"
+      - "{{ item.direction }}"
+  loop:
+    - { policy: deny, direction: incoming }
+    - { policy: allow, direction: outgoing }
+  changed_when: false
+
+- name: Allow SSH through the host firewall
+  become: true
+  ansible.builtin.command:
+    argv: [ufw, allow, OpenSSH]
+  register: ufw_ssh_rule
+  changed_when: "'Skipping adding existing rule' not in ufw_ssh_rule.stdout"
+
+- name: Allow HTTP through the web host firewall
+  become: true
+  ansible.builtin.command:
+    argv: [ufw, allow, "80/tcp"]
+  register: ufw_http_rule
+  changed_when: "'Skipping adding existing rule' not in ufw_http_rule.stdout"
+  when: "'web' in group_names"
+
+- name: Allow MongoDB only from the web server
+  become: true
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - allow
+      - from
+      - "{{ hostvars[groups['web'][0]]['ansible_default_ipv4']['address'] }}"
+      - to
+      - any
+      - port
+      - "27017"
+      - proto
+      - tcp
+  register: ufw_mongodb_rule
+  changed_when: "'Skipping adding existing rule' not in ufw_mongodb_rule.stdout"
+  when: "'db' in group_names"
+
+- name: Check host firewall status
+  become: true
+  ansible.builtin.command:
+    argv: [ufw, status]
+  register: ufw_status
+  changed_when: false
+
+- name: Enable the host firewall
+  become: true
+  ansible.builtin.command:
+    argv: [ufw, --force, enable]
+  when: "'Status: inactive' in ufw_status.stdout"
+
+- name: Enable and start Fail2ban
+  become: true
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

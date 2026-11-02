@@ -1,0 +1,149 @@
+---
+- name: Install Node.js repository setup
+  become: true
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  args:
+    creates: /etc/apt/sources.list.d/nodesource.list
+
+- name: Install Node.js, npm and Nginx
+  become: true
+  apt:
+    update_cache: true
+    name:
+      - nodejs
+      - nginx
+    state: present
+
+- name: Create application user
+  become: true
+  user:
+    name: travelapp
+    shell: /bin/bash
+    create_home: true
+
+- name: Create application directory
+  become: true
+  ansible.builtin.file:
+    path: /opt/TravelMemory
+    state: directory
+    owner: travelapp
+    group: travelapp
+    mode: "0755"
+
+- name: Clone TravelMemory
+  become: true
+  become_user: travelapp
+  git:
+    repo: https://github.com/UnpredictablePrashant/TravelMemory.git
+    dest: /opt/TravelMemory
+    version: main
+  register: travelmemory_checkout
+  notify: Restart TravelMemory API
+
+- name: Set ownership of application
+  become: true
+  file:
+    path: /opt/TravelMemory
+    owner: travelapp
+    group: travelapp
+    recurse: true
+
+- name: Install backend dependencies
+  become: true
+  become_user: travelapp
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: /opt/TravelMemory/backend
+  changed_when: false
+
+- name: Create backend environment file
+  become: true
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: /etc/travelmemory-backend.env
+    owner: root
+    group: travelapp
+    mode: "0640"
+  notify: Restart TravelMemory API
+
+- name: Create uploads directory
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/travelmemory/uploads
+    state: directory
+    owner: travelapp
+    group: travelapp
+    mode: "0750"
+
+- name: Install API systemd service
+  become: true
+  ansible.builtin.template:
+    src: travelmemory-api.service.j2
+    dest: /etc/systemd/system/travelmemory-api.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart TravelMemory API
+
+- name: Enable and start API service
+  become: true
+  ansible.builtin.systemd:
+    name: travelmemory-api
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Install frontend dependencies
+  become: true
+  become_user: travelapp
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: /opt/TravelMemory/frontend
+  changed_when: false
+
+- name: Build React frontend
+  become: true
+  become_user: travelapp
+  ansible.builtin.command:
+    cmd: npm run build
+    chdir: /opt/TravelMemory/frontend
+  environment:
+    REACT_APP_BACKEND_URL: "http://{{ ansible_host }}"
+
+- name: Configure Nginx for the frontend and API
+  become: true
+  ansible.builtin.template:
+    src: nginx-travelmemory.conf.j2
+    dest: /etc/nginx/sites-available/travelmemory
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Nginx
+
+- name: Enable TravelMemory Nginx site
+  become: true
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/travelmemory
+    dest: /etc/nginx/sites-enabled/travelmemory
+    state: link
+  notify: Reload Nginx
+
+- name: Disable default Nginx site
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload Nginx
+
+- name: Validate Nginx configuration
+  become: true
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Enable and start Nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

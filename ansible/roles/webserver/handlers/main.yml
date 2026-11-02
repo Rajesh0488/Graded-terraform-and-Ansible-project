@@ -1,0 +1,13 @@
+---
+- name: Restart TravelMemory API
+  become: true
+  ansible.builtin.systemd:
+    name: travelmemory-api
+    daemon_reload: true
+    state: restarted
+
+- name: Reload Nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded

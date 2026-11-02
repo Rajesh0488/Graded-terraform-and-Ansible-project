@@ -1,0 +1,30 @@
+---
+- name: Install common security and system packages
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Require strong MongoDB credentials
+      ansible.builtin.assert:
+        that:
+          - mongo_admin_password != 'REPLACE_WITH_STRONG_PASSWORD'
+          - mongo_app_password != 'REPLACE_WITH_STRONG_PASSWORD'
+          - mongo_admin_password != mongo_app_password
+          - mongo_admin_password | length >= 20
+          - mongo_app_password | length >= 20
+        fail_msg: >-
+          Set distinct MongoDB passwords of at least 20 characters in
+          ansible/group_vars/all.yml and encrypt the file with ansible-vault.
+  roles:
+    - common
+
+- name: Configure MongoDB database
+  hosts: db
+  become: true
+  roles:
+    - mongodb
+
+- name: Deploy TravelMemory web application
+  hosts: web
+  become: true
+  roles:
+    - webserver

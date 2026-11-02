@@ -1,0 +1,44 @@
+---
+- name: Install MongoDB prerequisites
+  become: true
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+    state: present
+    update_cache: true
+
+- name: Remove MongoDB 8.0 repository
+  become: true
+  ansible.builtin.deb822_repository:
+    name: mongodb-org-8.0
+    state: absent
+
+- name: Add MongoDB 7.0 repository
+  become: true
+  ansible.builtin.deb822_repository:
+    name: mongodb-org-7.0
+    types: [deb]
+    uris: https://repo.mongodb.org/apt/ubuntu
+    suites: "{{ ansible_distribution_release }}/mongodb-org/7.0"
+    components: [multiverse]
+    architectures: [amd64, arm64]
+    signed_by: https://pgp.mongodb.com/server-7.0.asc
+    install_python_debian: true
+    state: present
+
+- name: Install MongoDB 7.0
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    name: mongodb-org
+    state: present
+
+- name: Start MongoDB
+  become: true
+  ansible.builtin.service:
+    name: mongod
+    state: started
+    enabled: true
+
+- name: Configure MongoDB users and authentication
+  ansible.builtin.include_tasks: users.yml

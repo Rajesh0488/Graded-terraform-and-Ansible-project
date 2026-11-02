@@ -1,0 +1,62 @@
+---
+- name: Bootstrap MongoDB administrator
+  block:
+    - name: Install temporary administrator bootstrap script
+      become: true
+      ansible.builtin.template:
+        src: mongodb-admin.js.j2
+        dest: /run/travelmemory-mongodb-admin.js
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Create MongoDB administrator if needed
+      become: true
+      ansible.builtin.command:
+        argv: [mongosh, --quiet, --file, /run/travelmemory-mongodb-admin.js]
+      no_log: true
+  always:
+    - name: Remove temporary administrator bootstrap script
+      become: true
+      ansible.builtin.file:
+        path: /run/travelmemory-mongodb-admin.js
+        state: absent
+
+- name: Configure MongoDB with authentication
+  become: true
+  ansible.builtin.template:
+    src: mongod.conf.j2
+    dest: /etc/mongod.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart MongoDB
+
+- name: Apply MongoDB configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Configure MongoDB application user
+  block:
+    - name: Install temporary application-user script
+      become: true
+      ansible.builtin.template:
+        src: mongodb-app-user.js.j2
+        dest: /run/travelmemory-mongodb-app-user.js
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Create or update restricted MongoDB application user
+      become: true
+      ansible.builtin.command:
+        argv: [mongosh, --quiet, --file, /run/travelmemory-mongodb-app-user.js]
+      changed_when: false
+      no_log: true
+  always:
+    - name: Remove temporary application-user script
+      become: true
+      ansible.builtin.file:
+        path: /run/travelmemory-mongodb-app-user.js
+        state: absent

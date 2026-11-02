@@ -1,0 +1,8 @@
+# Encrypt this file with ansible-vault before supplying real deployment secrets.
+mongo_admin_user: tmadmin
+mongo_admin_password: "MongoAdmin!2026#Secure"
+
+mongo_app_user: tmapp
+mongo_app_password: "MongoApp!2026#Secure"
+
+mongo_database: travelmemory

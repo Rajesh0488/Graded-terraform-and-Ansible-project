@@ -1,0 +1,6 @@
+*.pem
+*.key
+*.tfstate
+*.tfstate.*
+.terraform/
+group_vars/all.yml
